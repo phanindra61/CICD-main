@@ -1,1 +1,12 @@
-
+pipeline {
+    agent any
+    stages {
+        stage("code checkout") {
+            steps {
+                echo "cloning the code"
+                git branch: 'main',
+                    url: 'https://github.com/rashmigmr13-eng/CICD.git'
+            }
+        }
+    }
+}
