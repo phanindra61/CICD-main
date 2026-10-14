@@ -1,85 +1,69 @@
-
 pipeline {
     agent any
 
     stages {
 
-        stage("Code Checkout") {
+        stage('Code Checkout') {
             steps {
-                echo "Cloning the code"
                 git branch: 'main',
-                    url: 'https://github.com/phanindra61/CICD-main.git'
+                    url: 'https://github.com/rashmigmr13-eng/CICD.git'
             }
         }
 
-        stage("Maven Unit Test") {
+        stage('Maven Unit Test') {
             steps {
-                dir("/var/lib/jenkins/workspace/new java") {
-                    sh 'mvn test'
-                }
+                sh 'mvn test'
             }
         }
 
-        stage("Maven Build") {
+        stage('Maven Build') {
             steps {
-                dir("/var/lib/jenkins/workspace/new java") {
-                    sh 'mvn clean install'
-                }
+                sh 'mvn clean install'
             }
         }
 
-        stage("Maven Integration Test") {
+        stage('Maven Integration Test') {
             steps {
-                dir("/var/lib/jenkins/workspace/new java") {
-                    sh 'mvn verify'
-                }
+                sh 'mvn verify'
             }
         }
 
-        stage("Build Docker Image") {
+        stage('Build Docker Image') {
             steps {
-                echo "Building Docker image"
                 sh 'docker build -t ci-pipeline .'
             }
         }
 
-        stage("Push Image to DockerHub") {
+        stage('Push Image to DockerHub') {
             steps {
-                echo "Pushing image to DockerHub"
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerHub',
+                    usernameVariable: 'dockerHubUser',
+                    passwordVariable: 'dockerHubPass'
+                )]) {
 
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerHub',
-                        usernameVariable: 'dockerHubUser',
-                        passwordVariable: 'dockerHubPass'
-                    )
-                ]) {
-                    sh '''
-                        docker tag ci-pipeline "$dockerHubUser/ci-pipeline:latest"
-
-                        echo "$dockerHubPass" | docker login \
-                            -u "$dockerHubUser" --password-stdin
-
-                        docker push "$dockerHubUser/ci-pipeline:latest"
-                    '''
+                    sh 'docker tag ci-pipeline ${dockerHubUser}/ci-pipeline:latest'
+                    sh 'echo ${dockerHubPass} | docker login -u ${dockerHubUser} --password-stdin'
+                    sh 'docker push ${dockerHubUser}/ci-pipeline:latest'
                 }
             }
         }
 
-        stage("Deploy to Kubernetes") {
+        stage('Deploy to Kubernetes') {
             steps {
-                dir("/var/lib/jenkins/workspace/new java") {
+                script {
                     withKubeConfig(
                         credentialsId: 'kubernetes',
                         restrictKubeConfigAccess: false
                     ) {
-                        sh '''
-                            kubectl apply -f deployment.yaml
-                            kubectl apply -f service.yaml
-                        '''
+
+                        sh 'kubectl delete pods --all || true'
+                        sh 'kubectl apply -f deployment.yaml'
+                        sh 'kubectl apply -f service.yaml'
                     }
                 }
             }
         }
+
     }
 }
