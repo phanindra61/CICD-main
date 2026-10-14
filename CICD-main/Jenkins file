@@ -1,11 +1,84 @@
+
 pipeline {
     agent any
+
     stages {
-        stage("code checkout") {
+
+        stage("Code Checkout") {
             steps {
-                echo "cloning the code"
+                echo "Cloning the code"
                 git branch: 'main',
-                    url: 'https://github.com/phanindra61/CICD-main.git'
+                    url: 'https://github.com/rashmigmr13-eng/CICD.git'
+            }
+        }
+
+        stage("Maven Unit Test") {
+            steps {
+                dir("/var/lib/jenkins/workspace/project3") {
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage("Maven Build") {
+            steps {
+                dir("/var/lib/jenkins/workspace/project3") {
+                    sh 'mvn clean install'
+                }
+            }
+        }
+
+        stage("Maven Integration Test") {
+            steps {
+                dir("/var/lib/jenkins/workspace/project3") {
+                    sh 'mvn verify'
+                }
+            }
+        }
+
+        stage("Build Docker Image") {
+            steps {
+                echo "Building Docker image"
+                sh 'docker build -t ci-pipeline .'
+            }
+        }
+
+        stage("Push Image to DockerHub") {
+            steps {
+                echo "Pushing image to DockerHub"
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerHub',
+                        usernameVariable: 'dockerHubUser',
+                        passwordVariable: 'dockerHubPass'
+                    )
+                ]) {
+                    sh '''
+                        docker tag ci-pipeline "$dockerHubUser/ci-pipeline:latest"
+
+                        echo "$dockerHubPass" | docker login \
+                            -u "$dockerHubUser" --password-stdin
+
+                        docker push "$dockerHubUser/ci-pipeline:latest"
+                    '''
+                }
+            }
+        }
+
+        stage("Deploy to Kubernetes") {
+            steps {
+                dir("/var/lib/jenkins/workspace/project3") {
+                    withKubeConfig(
+                        credentialsId: 'kubernetes',
+                        restrictKubeConfigAccess: false
+                    ) {
+                        sh '''
+                            kubectl apply -f deployment.yaml
+                            kubectl apply -f service.yaml
+                        '''
+                    }
+                }
             }
         }
     }
